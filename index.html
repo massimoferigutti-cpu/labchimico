@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laboratorio Virtuale di Chimica – Super Robusto</title>
+  <style>
+    :root{ --bg:#0f172a; --panel:#111827; --card:#1f2937; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; --accent-2:#22c55e; --warning:#f59e0b; --danger:#ef4444; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{ margin:0;background:linear-gradient(180deg,#0b1224,#0f172a 40%); color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; display:flex;flex-direction:column;min-height:100vh; }
+    header{ padding:.8rem 1rem;border-bottom:1px solid #0b1020;background:rgba(8,13,31,.8); position:sticky;top:0;backdrop-filter:blur(6px);z-index:5 }
+    header h1{margin:0;font-size:1.05rem;font-weight:600;letter-spacing:.2px}
+    header small{display:block;color:#94a3b8}
+    .app{display:grid;grid-template-columns:320px 1fr;gap:14px;flex:1;padding:14px;}
+    @media (max-width: 880px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+    aside.panel{ background:var(--panel);border:1px solid #0c1226;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.25); padding:14px; display:flex;flex-direction:column; gap:14px; }
+    .group{background:var(--card);border-radius:12px;border:1px solid #121a36;padding:12px}
+    .group h3{margin:0 0 .4rem 0;font-size:.9rem;color:#cbd5e1}
+    .exp-buttons{display:grid;grid-template-columns:1fr;gap:8px}
+    .btn{cursor:pointer;border:none;border-radius:10px;padding:10px 12px;font-weight:600; background:#0b1224;color:#e2e8f0;border:1px solid #1a244a;transition:.2s}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+    .btn.active{outline:2px solid var(--accent)}
+    .btn.secondary{background:#0d1428;color:#cbd5e1}
+    .btn.reset{background:#190f14;color:#fecaca;border-color:#3a0a12}
+    .dose{display:flex;align-items:center;gap:10px}
+    input[type=range]{width:100%}
+    .kv{display:flex;justify-content:space-between;color:#94a3b8;font-size:.85rem}
+    .reagents{display:flex;flex-wrap:wrap;gap:8px}
+    .chip{user-select:none}
+    .chip button{cursor:grab;border:1px dashed #3b426b;background:#0a1228;color:#cbd5e1;border-radius:999px;padding:6px 10px;font-size:.85rem}
+    .chip button:active{cursor:grabbing}
+    .progress{display:flex;gap:8px;flex-wrap:wrap}
+    .badge{border:1px solid #1a244a;border-radius:999px;padding:6px 10px;font-size:.8rem;background:#0b1224;color:#93c5fd;opacity:.7}
+    .badge.done{background:#052012;color:#bbf7d0;border-color:#134e4a;opacity:1}
+    .stage{position:relative;background:#060b1b;border:1px solid #0c1226;border-radius:14px;display:flex;align-items:stretch;justify-content:stretch;overflow:hidden;min-height:520px}
+    canvas{width:100%;height:100%;display:block;background:#081024}
+    .dropHint{position:absolute;inset:auto 12px 12px auto;background:#0b1224;border:1px solid #1a244a;border-radius:10px;padding:8px 10px;color:#cbd5e1;font-size:.9rem;z-index:2}
+    .toast{position:absolute;left:12px;bottom:12px;max-width:min(520px,90%);background:#0b1224;border:1px solid #1a244a;border-radius:12px;padding:10px 12px;color:#e2e8f0; box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:0;transform:translateY(8px);transition:.25s;z-index:3}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+    .legend{color:#94a3b8;font-size:.85rem}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Laboratorio Virtuale di Chimica – <span id="expTitle">Vulcano chimico</span>
+      <small>Trascina i reagenti sul becher e osserva la reazione. HTML/CSS/JS con Canvas API.</small>
+    </h1>
+  </header>
+
+  <div class="app">
+    <aside class="panel" aria-label="Pannello di controllo">
+      <div class="group">
+        <h3>Esperimenti</h3>
+        <div class="exp-buttons">
+          <button class="btn" data-exp="volcano">🌋 Vulcano chimico</button>
+          <button class="btn" data-exp="traffic">🧪 Semaforo chimico</button>
+          <button class="btn" data-exp="crystal">❄️ Cristallizzazione</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Contagocce (dosaggio)</h3>
+        <div class="dose">
+          <input id="dose" type="range" min="1" max="5" step="1" value="3" aria-label="Dosaggio gocce"/>
+          <span id="doseVal">3</span>
+        </div>
+        <div class="kv"><span>Poche gocce</span><span>Molte gocce</span></div>
+      </div>
+
+      <div class="group">
+        <h3>Reagenti</h3>
+        <div id="reagents" class="reagents" aria-label="Elenco reagenti"></div>
+        <p class="legend">Suggerimento: trascina un reagente sul palco (o direttamente sopra il becher disegnato).</p>
+      </div>
+
+      <div class="group">
+        <h3>Azioni</h3>
+        <div class="toolbar">
+          <button id="resetBtn" class="btn reset">↺ Reset esperimento</button>
+          <button id="infoBtn" class="btn secondary">ℹ️ Spiegazione</button>
+          <button id="stirBtn" class="btn secondary">🌀 Agita</button>
+          <select id="perfSel" class="btn secondary" aria-label="Impostazioni performance">
+            <option value="high">Qualità: Alta</option>
+            <option value="low">Qualità: Bassa</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Progresso</h3>
+        <div class="progress">
+          <span class="badge" data-badge="volcano">🌋 Vulcano</span>
+          <span class="badge" data-badge="traffic">🧪 Semaforo</span>
+          <span class="badge" data-badge="crystal">❄️ Cristalli</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Note didattiche</h3>
+        <ul style="margin:0 0 0 1rem; padding:0; line-height:1.4">
+          <li>Pop‑up esplicativi compaiono al momento giusto.</li>
+          <li>Reazioni semplificate per 11–14 anni.</li>
+          <li>Funziona offline (localStorage, con fallback in memoria).</li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="stage" aria-label="Palco esperimenti">
+      <canvas id="labCanvas"></canvas>
+      <div class="dropHint">💧 Rilascia qui i reagenti</div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <script>
+  window.addEventListener('DOMContentLoaded', () => { try { main() } catch(e){ console.error(e); alert('Errore iniziale: '+ e.message) }})
+
+  function main(){
+    const $ = (sel, el = document) => el.querySelector(sel)
+    const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel))
+
+    const storage = (() => { try { const k='__chem__'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return localStorage } catch(e){ return {getItem:()=>null,setItem:()=>{},removeItem:()=>{}} } })()
+    const storageKey = 'chemLabProgress_v1'
+    const saveProgress = (data) => { try { storage.setItem(storageKey, JSON.stringify(data)) } catch(e){} }
+    const loadProgress = () => { try { return JSON.parse(storage.getItem(storageKey)) || {completed:{}, last:null} } catch(e){ return {completed:{}, last:null} } }
+
+    function showToast(msg, ms = 2600){ const t = $('#toast'); if(!t) return; t.textContent = msg; t.classList.add('show'); clearTimeout(showToast._h); showToast._h = setTimeout(() => t.classList.remove('show'), ms) }
+
+    const AudioFx = (()=>{ let ctx; function ensure(){ if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)() } return { beep(f=420,d=0.14,type='sine',g=0.02){ try{ ensure(); const o=ctx.createOscillator(),v=ctx.createGain(); o.type=type;o.frequency.value=f;v.gain.value=g;o.connect(v);v.connect(ctx.destination);o.start();o.stop(ctx.currentTime+d) }catch{} } } })()
+
+    const canvas = $('#labCanvas'); if(!canvas){ alert('Canvas non trovato'); return }
+    const ctx = canvas.getContext('2d'); if(!ctx){ alert('Contesto 2D non disponibile'); return }
+    const stage = canvas.closest('.stage') || canvas.parentElement
+
+    function fitCanvas(){
+      const cssW = Math.max(300, stage.clientWidth || stage.offsetWidth || 900)
+      const cssH = Math.max(300, stage.clientHeight || stage.offsetHeight || 520)
+      const dpr  = Math.min(window.devicePixelRatio || 1, 2)
+      const w = Math.round(cssW * dpr)
+      const h = Math.round(cssH * dpr)
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+        canvas.style.width  = cssW + 'px'
+        canvas.style.height = cssH + 'px'
+        ctx.setTransform(dpr,0,0,dpr,0,0)
+      }
+    }
+    let _queued = false
+    function scheduleFit(){ if(_queued) return; _queued = true; requestAnimationFrame(()=>{ _queued=false; fitCanvas() }) }
+    window.addEventListener('resize', scheduleFit)
+
+    function rnd(a,b){return Math.random()*(b-a)+a}
+    function drawBeaker(x,y,w,h,fill='#0a142c'){ ctx.save(); ctx.lineWidth=2; ctx.strokeStyle='#6b7280'; ctx.fillStyle=fill; const r=12; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+w*0.15, y); ctx.lineTo(x+w*0.15, y+8); ctx.lineTo(x+w*0.85, y+8); ctx.lineTo(x+w*0.85, y); ctx.lineTo(x+w, y); ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h); ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore() }
+    function label(text){ ctx.save(); ctx.font='14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'; ctx.fillStyle='#cbd5e1'; ctx.fillText(text, 16, 26); ctx.restore() }
+    function drawGrid(){ const w = canvas.width/(window.devicePixelRatio||1), h = canvas.height/(window.devicePixelRatio||1); ctx.save(); ctx.strokeStyle='rgba(148,163,184,.08)'; ctx.lineWidth=1; const step=24; for(let x=0;x<w;x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke() } for(let y=0;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke() } ctx.restore() }
+
+    class Sim{ constructor(){ this.time=0; this.completed=false; this.quality='high' } setQuality(q){ this.quality=q } onAddReagent(){} onStir(){} info(){return ''} reset(){ this.time=0; this.completed=false } update(dt){ this.time+=dt } render(){} name(){return 'Esperimento'} reagents(){return []} }
+
+    class VolcanoSim extends Sim{ constructor(){ super(); this.nameId='volcano'; this.mix={Acido:0,Bicarbonato:0}; this.particles=[]; this.smoke=[]; this.erupting=false; this.cooldown=0 } name(){return 'Vulcano chimico'} reagents(){return ['Acido','Bicarbonato','Acqua']} info(){return 'Quando un acido reagisce con il bicarbonato si libera CO₂. Le bolle spingono verso l\'alto (eruzione).'} reset(){ super.reset(); this.mix={Acido:0,Bicarbonato:0}; this.particles.length=0; this.smoke.length=0; this.erupting=false; this.cooldown=0 } onAddReagent(n,d){ if(this.mix[n]!=null) this.mix[n]+=d; if(this.mix.Acido>0 && this.mix.Bicarbonato>0) this.triggerEruption(d) } triggerEruption(d){ if(this.cooldown>0) return; this.erupting=true; this.cooldown=1.2; const count=(this.quality==='high'?200:90)*(0.6+d/6); for(let i=0;i<count;i++){ this.particles.push({x:this.cx+rnd(-10,10),y:this.cy-6,vx:rnd(-1.2,1.2),vy:rnd(-6,-3)*(0.7+d/6),life:rnd(0.8,1.6),color:Math.random()<0.6?'#f97316':'#ef4444'}) } for(let i=0;i<60;i++) this.smoke.push({x:this.cx+rnd(-12,12),y:this.cy-12,r:rnd(6,14),a:0.6}); AudioFx.beep(180,0.12,'triangle',0.03); showToast('💡 Reazione acido–base: CO₂ in uscita (eruzione).'); this.completed=true } update(dt){ super.update(dt); if(this.cooldown>0) this.cooldown-=dt; const g=12; this.particles.forEach(p=>{ p.vy+=g*dt*0.6; p.x+=p.vx*60*dt; p.y+=p.vy*60*dt; p.life-=dt }); this.particles=this.particles.filter(p=>p.life>0 && p.y<this.cy+120); this.smoke.forEach(s=>{ s.y-=8*dt; s.a-=0.25*dt }); this.smoke=this.smoke.filter(s=>s.a>0) } render(){ const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1); ctx.clearRect(0,0,canvas.width,canvas.height); drawGrid(); const beakerFill=this.erupting?'rgba(239,68,68,.35)':'rgba(59,130,246,.2)'; drawBeaker(w*0.5-80,h*0.55-100,160,200,beakerFill); this.cx=w*0.5; this.cy=h*0.55-20; this.smoke.forEach(s=>{ ctx.save(); ctx.globalAlpha=s.a; ctx.fillStyle='rgba(148,163,184,.35)'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); ctx.restore() }); this.particles.forEach(p=>{ ctx.fillStyle=p.color; ctx.fillRect(p.x,p.y,3,3) }); label('🌋 Vulcano: trascina Acido + Bicarbonato nel becher') } }
+
+    class TrafficSim extends Sim{ constructor(){ super(); this.nameId='traffic'; this.indicator=0; this.stir=0; this.phase=0; this.colorT=0 } name(){return 'Semaforo chimico'} reagents(){return ['Indicatore','Soluzione A','Soluzione B']} info(){return 'Viraggi di colore semplificati: rosso→giallo→verde con agitazione.'} reset(){ super.reset(); this.indicator=0; this.stir=0; this.phase=0; this.colorT=0 } onAddReagent(n,d){ if(n==='Indicatore') this.indicator+=d; else this.stir+=d*0.2; this.tryAdvance() } onStir(){ this.stir+=1; this.tryAdvance() } tryAdvance(){ if(this.indicator<=0) return; if(this.phase===0 && this.stir>0.6){ this.phase=1; showToast('🔴 → 🟡 Primo viraggio'); AudioFx.beep(300,0.08) } else if(this.phase===1 && this.stir>1.2){ this.phase=2; this.completed=true; showToast('🟡 → 🟢 Secondo viraggio'); AudioFx.beep(520,0.1) } } update(dt){ super.update(dt); if(this.colorT<1) this.colorT+=dt*0.25 } render(){ const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1); ctx.clearRect(0,0,canvas.width,canvas.height); drawGrid(); let col=this.phase===0?'rgba(239,68,68,.4)':(this.phase===1?'rgba(245,158,11,.45)':'rgba(34,197,94,.45)'); drawBeaker(w*0.5-80,h*0.55-100,160,200,col); const bubbles=this.quality==='high'?40:18; for(let i=0;i<bubbles;i++){ const bx=w*0.5+Math.sin((this.time*0.6+i)*0.9)*40+(i%8-4); const by=h*0.55+60-((this.time*50+i*20)%160); ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,255,255,.15)'; ctx.beginPath(); ctx.arc(bx,by,3,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1 } label('🧪 Semaforo: Indicatore, poi Agita (o A/B)') } }
+
+    class CrystalSim extends Sim{ constructor(){ super(); this.nameId='crystal'; this.seed=0; this.points=[]; this.level=0 } name(){return 'Cristallizzazione'} reagents(){return ['Soluzione A','Soluzione B','Semini']} info(){return 'Crescita ordinata da seme + sovrasaturazione (A+B).'} reset(){ super.reset(); this.seed=0; this.points=[]; this.level=0 } onAddReagent(n,d){ if(n==='Semini') this.seed+=d; if(n==='Soluzione A' || n==='Soluzione B') this.level+=d*0.5; if(this.seed>0 && this.level>0.6) this.spawnCrystal() } spawnCrystal(){ if(this.points.length===0) showToast('❄️ Nucleazione del cristallo'); const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1); const cx=w*0.5, cy=h*0.55+30; const n=this.quality==='high'?11:6; for(let i=0;i<n;i++){ const ang=(i/n)*Math.PI*2; this.points.push({x:cx,y:cy,vx:Math.cos(ang)*rnd(12,24),vy:Math.sin(ang)*rnd(12,24),len:0}) } this.completed=true; AudioFx.beep(600,0.08,'square',0.02) } update(dt){ super.update(dt); this.points.forEach(p=>{ p.len+=dt*(this.quality==='high'?40:22) }) } render(){ const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1); ctx.clearRect(0,0,canvas.width,canvas.height); drawGrid(); drawBeaker(w*0.5-80,h*0.55-100,160,200,'rgba(59,130,246,.18)'); ctx.save(); ctx.strokeStyle='#7dd3fc'; ctx.lineWidth=2; this.points.forEach(p=>{ ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*(p.len/60), p.y+p.vy*(p.len/60)); ctx.stroke() }); ctx.restore(); label('❄️ Cristallizzazione: Semini + (A e B)') } }
+
+    const experiments={ volcano:new VolcanoSim(), traffic:new TrafficSim(), crystal:new CrystalSim() }
+    let sim=experiments.volcano
+
+    function setExperiment(id){ sim=experiments[id]; $('#expTitle').textContent=sim.name(); $$('.btn[data-exp]').forEach(b=>b.classList.toggle('active',b.dataset.exp===id)); const host=$('#reagents'); host.innerHTML=''; sim.reagents().forEach(r=>host.appendChild(makeChip(r))); sim.reset(); updateBadges(); const prog=loadProgress(); prog.last=id; saveProgress(prog) }
+    function makeChip(label){ const w=document.createElement('div'); w.className='chip'; const b=document.createElement('button'); b.textContent=label; b.setAttribute('draggable','true'); b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',label)); b.addEventListener('click',()=>{ const dose=+$('#dose').value; addReagent(label,dose) }); w.appendChild(b); return w }
+    function addReagent(name,dose){ sim.onAddReagent(name,dose); showToast(`Aggiunte ${dose} gocce di ${name}`); AudioFx.beep(420+dose*30,0.06); if(sim.completed){ const prog=loadProgress(); prog.completed[sim.nameId]=true; saveProgress(prog); updateBadges() } }
+    function updateBadges(){ const prog=loadProgress(); $$('.badge').forEach(b=>b.classList.toggle('done',!!prog.completed[b.dataset.badge])) }
+
+    stage.addEventListener('dragover',e=>e.preventDefault());
+    stage.addEventListener('drop',e=>{ e.preventDefault(); const reagent=e.dataTransfer.getData('text/plain'); const dose=+$('#dose').value; addReagent(reagent,dose) })
+
+    $('#resetBtn').addEventListener('click',()=>{ sim.reset(); showToast('Esperimento resettato.') })
+    $('#infoBtn').addEventListener('click',()=> showToast(sim.info(),4000))
+    $('#stirBtn').addEventListener('click',()=>{ if(sim.onStir) sim.onStir(); showToast('Agitazione…') })
+    $('#perfSel').addEventListener('change',e=>{ const q=e.target.value; Object.values(experiments).forEach(s=>s.setQuality(q)) })
+    $('#dose').addEventListener('input',e=> $('#doseVal').textContent=e.target.value)
+    $$('.btn[data-exp]').forEach(b=> b.addEventListener('click',()=> setExperiment(b.dataset.exp)))
+
+    let last=0
+    function loop(t){ if(!last) last=t; const dt=Math.min((t-last)/1000,0.033); last=t; sim.update(dt); sim.render(); requestAnimationFrame(loop) }
+
+    requestAnimationFrame(()=>{ requestAnimationFrame(()=>{ fitCanvas(); updateBadges(); const prog=loadProgress(); setExperiment(prog.last||'volcano'); requestAnimationFrame(loop) }) })
+
+    setTimeout(()=>{ try{ const px = ctx.getImageData(10,10,1,1).data; if(px[3]===0){ showToast('Se non vedi il becher: ricarica (Ctrl+F5) o apri il file fuori dall\'anteprima.'); } }catch{} }, 1500)
+  }
+  </script>
+</body>
+</html>
